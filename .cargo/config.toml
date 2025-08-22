@@ -1,0 +1,2 @@
+[env]
+CARGO_WORKSPACE_DIR = { relative = true, value = "*" }
