@@ -22,3 +22,6 @@ target
 
 **/.devcontainer
 **/Cargo.lock
+wallet-extension/extension/js/wasm/
+wallet-extension/dist
+wallet-extension/extension/manifest.json

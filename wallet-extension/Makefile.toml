@@ -1,0 +1,51 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+WALLET_EXTENSION_NAME = "wallet-extension"
+CARGO_MAKE_WORKING_DIRECTORY = "${WALLET_EXTENSION_NAME}"
+WALLET_EXTENSION_RELEASE_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/target/wallet-extension"
+
+[tasks.default]
+clear = true
+dependencies = ["pack_debug"]
+watch = { postpone = true, no_git_ignore = true, watch = [
+    "src",
+    "extension/js/background.js",
+    "extension/assets",
+    "extension/pages",
+    "extension/manifest-firefox.json",
+    "extension/manifest-chrome.json",
+] }
+
+[tasks.pack_debug]
+dependencies = ["build_debug", "pack_extensions"]
+
+[tasks.pack_extensions]
+script = '''
+echo  -------- PACKING WEB-EXTENSION::wasm::debug --------- \n
+echo -- Removing bloat.... ---
+rm -f ./extension/js/wasm/.gitignore
+rm -f ./extension/js/wasm/package.json
+echo  -- Finished removing bloat.... ---
+
+rm -f ${WALLET_EXTENSION_RELEASE_DIR}/*
+mkdir -p  ${WALLET_EXTENSION_RELEASE_DIR}
+cd ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/${WALLET_EXTENSION_NAME}/extension/
+
+echo  -- Creating firefox extension.... ---
+cp manifest-firefox.json -v manifest.json
+zip -rq ${WALLET_EXTENSION_RELEASE_DIR}/atoll-extension-firefox.zip . -x manifest-firefox.json -x manifest-chrome.json
+echo  -- Finished creating firefox extension.... ---
+
+echo  -- Creating Chrome extension.... ---
+cp manifest-chrome.json -v manifest.json
+zip -rq ${WALLET_EXTENSION_RELEASE_DIR}/atoll-extension-chrome.zip . -x manifest-firefox.json -x manifest-chrome.json
+echo  -- Finished creating Chrome extension.... ---
+
+'''
+
+
+[tasks.build_debug]
+script = '''
+echo -------- BUILDING WEB-EXTENSION::wasm::debug ---------
+wasm-pack build --dev --no-typescript --out-dir "./extension/js/wasm" --out-name "atoll_wallet_webextension" --target web
+'''
