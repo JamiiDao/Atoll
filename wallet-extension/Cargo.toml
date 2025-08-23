@@ -1,0 +1,23 @@
+[package]
+name = "wallet-extension"
+edition = "2024"
+authors.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+web-sys = { version = "0.3.77", features = [
+    "Window",
+    "Document",
+    "HtmlElement",
+    "Text",
+    "console",
+] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.50"
