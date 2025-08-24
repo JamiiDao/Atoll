@@ -17,6 +17,8 @@ web-sys = { version = "0.3.77", features = [
     "HtmlElement",
     "Text",
     "console",
+    "Event",
+    "MessageEvent",
 ] }
 
 [dev-dependencies]

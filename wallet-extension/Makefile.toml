@@ -10,6 +10,7 @@ dependencies = ["pack_debug"]
 watch = { postpone = true, no_git_ignore = true, watch = [
     "src",
     "extension/js/background.js",
+    "extension/js/content.js",
     "extension/assets",
     "extension/pages",
     "extension/manifest-firefox.json",
@@ -21,7 +22,7 @@ dependencies = ["build_debug", "pack_extensions"]
 
 [tasks.pack_extensions]
 script = '''
-echo  -------- PACKING WEB-EXTENSION::wasm::debug --------- \n
+echo  -------- PACKING WEB-EXTENSION::wasm::debug ---------
 echo -- Removing bloat.... ---
 rm -f ./extension/js/wasm/.gitignore
 rm -f ./extension/js/wasm/package.json
@@ -40,7 +41,7 @@ echo  -- Creating Chrome extension.... ---
 cp manifest-chrome.json -v manifest.json
 zip -rq ${WALLET_EXTENSION_RELEASE_DIR}/atoll-extension-chrome.zip . -x manifest-firefox.json -x manifest-chrome.json
 echo  -- Finished creating Chrome extension.... ---
-
+echo > manifest.json
 '''
 
 
