@@ -1,14 +1,18 @@
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{JsCast, prelude::*};
+use web_sys::js_sys;
 
-/// Makes JS `console.log` available in Rust
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace=console)]
     fn log(s: &str);
 }
 
-/// A demo function to test if WASM is callable from background.js
 #[wasm_bindgen]
 pub fn hello_wasm() {
-    log("Hello from WASM!");
+    log("Atoll Wallet Extension Online...:)");
+}
+
+#[wasm_bindgen]
+pub fn app_ready() {
+    log("Event fired...:)");
 }
