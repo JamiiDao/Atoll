@@ -9,17 +9,36 @@ license.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wasm-bindgen = "0.2.100"
-wasm-bindgen-futures = "0.4.50"
-web-sys = { version = "0.3.77", features = [
+bs58 = { version = "0.5.1", default-features = false }
+console_error_panic_hook = "0.1.7"
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
+thiserror = "2.0.16"
+wallet-standard-base = { version = "0.1.4", features = ["getrandom"] }
+bincode = "1"
+solana-keypair = { version = "2", default-features = false, features = [
+    "seed-derivable",
+] }
+solana-pubkey = { version = "=2", features = ["curve25519"] }
+solana-seed-derivable = "=2"
+solana-seed-phrase = "=2"
+solana-signer = "=2"
+solana-transaction = { version = "=2", features = ["dev-context-only-utils"] }
+tiny-bip39 = { version = "2.0.0", default-features = false, features = [
+    "rand",
+] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = [
     "Window",
     "Document",
-    "HtmlElement",
-    "Text",
     "console",
-    "Event",
-    "MessageEvent",
+    "HtmlElement",
+    "HtmlHeadElement",
+    "HtmlScriptElement",
+    "CustomEventInit",
+    "CustomEvent",
 ] }
-
-[dev-dependencies]
-wasm-bindgen-test = "0.3.50"
+zeroize = "1.8.1"
+async-lock = "3.4.1"
+async-channel = "2.5.0"
+once_cell = "1.21.3"

@@ -1,18 +1,21 @@
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::js_sys;
+mod message_handler;
+pub use message_handler::*;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace=console)]
-    fn log(s: &str);
-}
+mod impl_solana;
+pub use impl_solana::*;
 
-#[wasm_bindgen]
-pub fn hello_wasm() {
-    log("Atoll Wallet Extension Online...:)");
-}
+mod impl_bitcoin;
+pub use impl_bitcoin::*;
 
-#[wasm_bindgen]
-pub fn app_ready() {
-    log("Event fired...:)");
-}
+mod errors;
+pub use errors::*;
+
+pub(crate) const WALLET_NAME: &str = "Atoll Wallet";
+
+pub(crate) const ICON: &[u8] =
+    include_bytes!(concat!(env!("CARGO_WORKSPACE_DIR"), "/atoll-logo.svg"));
+
+pub(crate) const TEST_MNEMONIC: &str =
+    "wrap kingdom punch clog kiss useless celery exist bulk catch share creek";
+
+pub(crate) const TEST_PASSPHRASE: &str = "quick brown fox";
