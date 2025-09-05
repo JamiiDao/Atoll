@@ -1,22 +1,33 @@
 use std::{cell::RefCell, rc::Rc};
 
+use solana_signer::Signer;
 use wallet_standard_base::{SemverVersion, WalletStandardIcon, WindowEvent};
 use wasm_bindgen::{
     JsCast, JsValue,
     prelude::{Closure, wasm_bindgen},
 };
 use web_sys::{CustomEvent, CustomEventInit, EventTarget, console, js_sys};
+use zeroize::Zeroizing;
 
-use crate::{ICON, Reflection, SolanaConstants, SolanaWalletAccount, WALLET_NAME};
+use crate::{
+    ICON, Reflection, SolanaAccountKeypair, SolanaConstants, SolanaWalletAccount, TEST_MNEMONIC,
+    TEST_PASSPHRASE, WALLET_NAME,
+};
 
 #[wasm_bindgen]
 pub fn get_injected_wallet() {
     let window = web_sys::window().expect("Window was not found or could not be detected");
-    InjectedWallet::inject_wallet_events(window);
+    let injected_wallet = Rc::new(RefCell::new(InjectedWallet::new()));
+
+    InjectedWallet::inject_wallet_events(injected_wallet.clone(), window);
 }
 
+pub type InjectedWalletAccounts = Rc<RefCell<Option<SolanaWalletAccount<'static>>>>;
+type InjectedEventListeners = Rc<RefCell<Vec<(EventEmitted, js_sys::Function)>>>;
+
 pub struct InjectedWallet {
-    accounts: Rc<RefCell<Option<SolanaWalletAccount<'static>>>>,
+    accounts: InjectedWalletAccounts,
+    event_listeners: InjectedEventListeners,
     reflect: Reflection,
     chains: &'static [&'static str],
     icon: WalletStandardIcon,
@@ -28,10 +39,10 @@ impl InjectedWallet {
         Self::default()
     }
 
-    pub fn to_object(self) -> JsValue {
+    pub fn to_object(&self) -> JsValue {
         self.name().version().icon().chains().accounts().features();
 
-        self.reflect.take()
+        self.reflect.cloned()
     }
 
     pub fn name(&self) -> &Self {
@@ -70,22 +81,37 @@ impl InjectedWallet {
     }
 
     pub fn accounts(&self) -> &Self {
-        let accounts = js_sys::Array::new();
+        let accounts_ref = self.accounts.clone();
 
-        if let Some(account) = self.accounts.borrow().as_ref() {
-            accounts.push(&account.to_js_value_object());
-        }
+        let fetch_accounts = Closure::wrap(Box::new(move || -> js_sys::Array {
+            let accounts_array = js_sys::Array::new();
+            if let Some(account) = accounts_ref.borrow().as_ref() {
+                accounts_array.push(&account.to_js_value_object());
+            }
+            accounts_array
+        }) as Box<dyn FnMut() -> js_sys::Array>);
 
-        self.reflect.set_object_secure("accounts", &accounts);
+        let getter_object = Reflection::new_object();
+        getter_object.set_object_secure("get", fetch_accounts.as_ref().unchecked_ref());
+
+        let target_js_value = self.reflect.cloned();
+
+        js_sys::Object::define_property(
+            &target_js_value.into(),
+            &JsValue::from_str("accounts"),
+            &getter_object.take().into(),
+        );
+
+        fetch_accounts.forget();
 
         self
     }
 
     pub fn features(&self) -> &Self {
         let features_object = Features::new()
-            .standard_connect()
+            .standard_connect(self)
             .standard_disconnect()
-            .standard_events()
+            .standard_events(self)
             .sign_in()
             .sign_message()
             .sign_message()
@@ -99,29 +125,28 @@ impl InjectedWallet {
         self
     }
 
-    pub fn inject_wallet_events(window: web_sys::Window) {
+    pub fn inject_wallet_events(
+        injected_wallet: Rc<RefCell<InjectedWallet>>,
+        window: web_sys::Window,
+    ) {
         let target: EventTarget = window
             .clone()
             .dyn_into()
             .expect("Unable to get the `EventTarget` from the window");
 
-        let injected_wallet = InjectedWallet::new();
-        let injected_wallet_object = injected_wallet.to_object();
-
-        console::log_2(&"Entire wallet".into(), &injected_wallet_object);
-
         let closure = Closure::wrap(Box::new(move |_event: web_sys::Event| {
             let window = window.clone();
-
-            let injected_wallet_object = injected_wallet_object.clone();
+            let injected_wallet2 = injected_wallet.clone();
 
             // Build the callback: (api) => api.register(wallet)
             let callback = Closure::wrap(Box::new(move |api: JsValue| {
+                let injected_wallet_object = injected_wallet2.as_ref().borrow().to_object();
+
                 let register_fn = js_sys::Reflect::get(&api, &JsValue::from_str("register"))
                     .expect("Unable to get the register function")
                     .dyn_into::<js_sys::Function>()
                     .expect("`register` is not a function");
-                let _ = register_fn.call1(&api, &injected_wallet_object);
+                register_fn.call1(&api, &injected_wallet_object).unwrap();
             }) as Box<dyn FnMut(JsValue)>);
 
             // Create CustomEventInit with { detail: callback }
@@ -147,6 +172,7 @@ impl InjectedWallet {
                 closure.as_ref().unchecked_ref(),
             )
             .expect("Unable to add event listener for `appready`");
+
         closure.forget();
     }
 }
@@ -155,6 +181,7 @@ impl Default for InjectedWallet {
     fn default() -> Self {
         Self {
             icon: WalletStandardIcon::new_svg(ICON),
+            event_listeners: Rc::new(RefCell::new(Vec::default())),
             name: WALLET_NAME,
             accounts: Rc::new(RefCell::new(Option::default())),
             reflect: Reflection::new_object(),
@@ -187,13 +214,84 @@ impl Features {
         );
     }
 
-    fn standard_connect(self) -> Self {
-        let connect_function = Closure::wrap(Box::new(move || -> JsValue {
-            // TODO: Send a message to the background
-            console::log_1(&"standard:connect FUNCTION".into());
+    fn event_emitter(
+        standard_event_listeners: InjectedEventListeners,
+        event_emitted: EventEmitted,
+        output: &JsValue,
+    ) {
+        standard_event_listeners.as_ref().borrow().iter().for_each(
+            |(listener_name, listener_fn)| {
+                console::log_1(&"Reached event emitter > ".into());
 
-            JsValue::NULL
-        }) as Box<dyn Fn() -> JsValue>);
+                if *listener_name == event_emitted {
+                    console::log_3(
+                        &"ON EVENT EMITTED>".into(),
+                        &format!("{listener_name:?}").into(),
+                        listener_fn,
+                    );
+
+                    console::log_2(&"OUTPUT ARRAY > ".into(), output);
+
+                    listener_fn.call1(&JsValue::NULL, output).unwrap();
+                }
+            },
+        );
+    }
+
+    fn standard_connect(self, injected_wallet: &InjectedWallet) -> Self {
+        let accounts = injected_wallet.accounts.clone();
+        let standard_event_listeners = injected_wallet.event_listeners.clone();
+
+        let connect_function = Closure::wrap(Box::new(move |args: JsValue| {
+            // TODO: connect(silent ? { onlyIfTrusted: true } : undefined)
+            // TODO: If silent is falsy → it passes undefined as the argument
+            // TODO: If silent is truthy → it passes the object { onlyIfTrusted: true } as the argument.
+
+            // Wrap async Rust code into a JS Promise
+
+            console::log_2(&"call args > ".into(), &args);
+
+            let standard_event_listeners = standard_event_listeners.clone();
+            let accounts = accounts.clone();
+
+            let future = async move {
+                let standard_event_listeners = standard_event_listeners.clone();
+
+                // Do your async work here (like connecting to wallet)
+                let wallet_inner = SolanaAccountKeypair::new_from_mnemonic(
+                    Zeroizing::new(TEST_MNEMONIC.to_string()),
+                    Some(Zeroizing::new(TEST_PASSPHRASE.to_string())),
+                )
+                .unwrap();
+
+                let solana_account =
+                    SolanaWalletAccount::new(wallet_inner.expose().pubkey().to_bytes());
+                accounts.borrow_mut().replace(solana_account);
+                let account = accounts
+                    .as_ref()
+                    .borrow()
+                    .as_ref()
+                    .expect("Account was not set successfully")
+                    .to_js_value_object();
+                let accounts = js_sys::Array::new();
+                accounts.push(&account);
+                let accounts_object = Reflection::new_object();
+                accounts_object.set_object_secure("accounts", &accounts);
+
+                let event_emitted = EventEmitted::AccountChanged;
+
+                let wallet_accounts_object = accounts_object.take();
+
+                Self::event_emitter(
+                    standard_event_listeners,
+                    event_emitted,
+                    &wallet_accounts_object,
+                );
+
+                Ok(wallet_accounts_object)
+            };
+            wasm_bindgen_futures::future_to_promise(future)
+        }) as Box<dyn Fn(_) -> js_sys::Promise>);
 
         let connect_object = Reflection::new_object();
         self.set_version(&connect_object);
@@ -231,11 +329,21 @@ impl Features {
         self
     }
 
-    fn standard_events(self) -> Self {
+    fn standard_events(self, injected_wallet: &InjectedWallet) -> Self {
         let on_function =
             Closure::wrap(Box::new(move |event: JsValue, listener: js_sys::Function| {
                 web_sys::console::log_1(&"standard:events > on called!".into());
                 web_sys::console::log_2(&event, &listener);
+
+                let event_name = event
+                    .as_string()
+                    .expect("`on` called but event name is not a String");
+                let event_type: EventEmitted = event_name.as_str().try_into().unwrap();
+
+                injected_wallet
+                    .event_listeners
+                    .borrow_mut()
+                    .push((event_type, listener));
             }) as Box<dyn FnMut(JsValue, js_sys::Function)>);
 
         let events_object = Reflection::new_object();
@@ -369,5 +477,40 @@ impl FieldWithGetter {
         wallet_object.set_object_secure(self.key.as_str(), version_getter.as_ref().unchecked_ref());
 
         version_getter.forget();
+    }
+}
+
+pub struct WindowUtils;
+
+impl WindowUtils {
+    pub fn window() -> web_sys::Window {
+        web_sys::window().expect("Unable to find the window object")
+    }
+    pub fn document() -> web_sys::Document {
+        Self::window()
+            .document()
+            .expect("Unable to find the document object")
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+enum EventEmitted {
+    Connect,
+    Disconnect,
+    AccountChanged,
+}
+
+impl TryFrom<&str> for EventEmitted {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let converted = match value {
+            "connect" => Self::Connect,
+            "disconnect" => Self::Disconnect,
+            "change" => Self::AccountChanged,
+            _ => return Err("Unsupported event for `[standard:events]:on`"),
+        };
+
+        Ok(converted)
     }
 }

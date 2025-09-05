@@ -89,6 +89,10 @@ impl Reflection {
         self.0
     }
 
+    pub fn cloned(&self) -> JsValue {
+        self.0.clone()
+    }
+
     pub fn peek(&self) -> &JsValue {
         self.0.as_ref()
     }
