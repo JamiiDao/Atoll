@@ -63,6 +63,8 @@
 //     }
 
 //     get accounts() {
+//       console.log("GET ACCOUNTS CALLED");
+
 //       return this.#account ? [this.#account] : [];
 //     }
 
@@ -82,12 +84,21 @@
 //     }
 
 //     #on = (event, listener) => {
+//       console.log("EVENT", event);
+//       console.log("EVENT_LISTNER", listener);
 //       this.#listeners[event]?.push(listener) ||
 //         (this.#listeners[event] = [listener]);
 //       return () => this.#off(event, listener);
 //     };
 //     #emit(event, ...args) {
-//       this.#listeners[event]?.forEach((listener) => listener.apply(null, args));
+//       console.log("EVENT EMIITED", event);
+//       // console.log("EVENT_LISTNER EMIITED", ...args);
+//       // console.log("EVENT_LISTNER EMIITED>....", args);
+//       // this.#listeners[event]?.forEach((listener) => listener.apply(null, args));
+//       this.#listeners[event]?.forEach((listener) => {
+//         console.log("EVENT_LISTENER EMITTED>", listener);
+//         listener.apply(null, args);
+//       });
 //     }
 //     #off(event, listener) {
 //       this.#listeners[event] = this.#listeners[event]?.filter(
@@ -217,10 +228,8 @@
   const script = document.createElement("script");
   script.textContent = `
     (async () => {
-      console.log("running inner async fn with", ${JSON.stringify(wasmUrl)});
+      // Get the path for the wasm js to load the wasm modules
       const wasm = await import(${JSON.stringify(wasmUrl)});
-
-      // console.log("wasm module loaded", wasm);
 
       await wasm.default();
       await wasm.get_injected_wallet();
