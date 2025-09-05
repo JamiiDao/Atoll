@@ -28,7 +28,7 @@ rm -f ./extension/js/wasm/.gitignore
 rm -f ./extension/js/wasm/package.json
 echo  -- Finished removing bloat.... ---
 
-rm -f ${WALLET_EXTENSION_RELEASE_DIR}/*
+rm -rf ${WALLET_EXTENSION_RELEASE_DIR}/*
 mkdir -p  ${WALLET_EXTENSION_RELEASE_DIR}
 cd ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/${WALLET_EXTENSION_NAME}/extension/
 
@@ -41,6 +41,11 @@ echo  -- Creating Chrome extension.... ---
 cp manifest-chrome.json -v manifest.json
 zip -rq ${WALLET_EXTENSION_RELEASE_DIR}/atoll-extension-chrome.zip . -x manifest-firefox.json -x manifest-chrome.json
 echo  -- Finished creating Chrome extension.... ---
+
+echo  -- Unzipping Chrome extension for debug.... ---
+unzip ${WALLET_EXTENSION_RELEASE_DIR}/atoll-extension-chrome.zip -d "${WALLET_EXTENSION_RELEASE_DIR}/$(basename atoll-extension-chrome.zip .zip)"
+echo  -- Finished unzipping Chrome extension for debug.... ---
+
 echo > manifest.json
 '''
 

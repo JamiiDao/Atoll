@@ -1,2 +1,5 @@
 [env]
-CARGO_WORKSPACE_DIR = { relative = true, value = "*" }
+CARGO_WORKSPACE_DIR = { relative = true, value = "" }
+
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
