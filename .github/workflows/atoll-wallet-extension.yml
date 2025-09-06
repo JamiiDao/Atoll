@@ -1,4 +1,4 @@
-name: Build atoll-common
+name: Build atoll-wallet-extension
 
 on:
   push:
@@ -42,14 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run cargo clippy and error on warnings
-        run: cargo clippy -p atoll-common -- -D warnings
+        run: cargo clippy -p atoll-wallet-extension -- -D warnings
 
   build-docs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run cargo clippy and error on warnings
-        run: cargo doc -p atoll-common --all-features
+        run: cargo doc -p atoll-wallet-extension --all-features
   build:
     name: Build
     strategy:
@@ -83,7 +83,7 @@ jobs:
       - name: Install Browser wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: Build
-        run: cargo build -p atoll-common --all-features
+        run: cargo build --target wasm32-unknown-unknown -p atoll-wallet-extension --all-features
 
   test:
     name: Test
@@ -110,4 +110,4 @@ jobs:
       - name: Install Browser wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: Build
-        run: cargo build -p atoll-common --all-features
+        run: cargo build --target wasm32-unknown-unknown -p atoll-wallet-extension --all-features

@@ -1,5 +1,5 @@
 [package]
-name = "wallet-extension"
+name = "atoll-wallet-extension"
 edition = "2024"
 authors.workspace = true
 version.workspace = true
@@ -37,8 +37,8 @@ web-sys = { workspace = true, features = [
     "HtmlScriptElement",
     "CustomEventInit",
     "CustomEvent",
+    "MessageEvent",
+    "Location",
 ] }
 zeroize = "1.8.1"
-async-lock = "3.4.1"
-async-channel = "2.5.0"
-once_cell = "1.21.3"
+blake3 = { version = "1.8.2", default-features = false }
