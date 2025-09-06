@@ -1,57 +1,12 @@
 use core::fmt;
 use std::borrow::Cow;
 
-use bip39::{Language, Mnemonic, MnemonicType};
-use solana_keypair::Keypair;
-use solana_seed_derivable::SeedDerivable;
 use wallet_standard_base::{
     Byte32Array, Cluster, ClusterEnabled, StandardFeatures, WalletAccount, WalletStandardIcon,
 };
 use wasm_bindgen::JsValue;
-use zeroize::Zeroizing;
 
-use crate::{AtollWalletError, AtollWalletResult, Reflection, SolanaCluster};
-
-pub struct SolanaAccountKeypair(Keypair);
-
-impl SolanaAccountKeypair {
-    pub(crate) fn new_from_mnemonic(
-        mnemonic: Zeroizing<String>,
-        passphrase: Option<Zeroizing<String>>,
-    ) -> AtollWalletResult<Self> {
-        let mnemonic = Mnemonic::from_phrase(&mnemonic, Language::English)?;
-
-        let phrase: &str = mnemonic.phrase();
-
-        let keypair =
-            Keypair::from_seed_phrase_and_passphrase(phrase, &passphrase.unwrap_or_default())
-                .map_err(|error| {
-                    AtollWalletError::UnableToConvertMnemonicToKeypair(error.to_string())
-                })?;
-
-        Ok(Self(keypair))
-    }
-
-    pub(crate) fn new(
-        passphrase: Option<Zeroizing<String>>,
-    ) -> AtollWalletResult<(Self, Zeroizing<String>)> {
-        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-
-        let phrase = mnemonic.phrase().to_owned();
-
-        let keypair =
-            Keypair::from_seed_phrase_and_passphrase(&phrase, &passphrase.unwrap_or_default())
-                .map_err(|error| {
-                    AtollWalletError::UnableToConvertMnemonicToKeypair(error.to_string())
-                })?;
-
-        Ok((Self(keypair), Zeroizing::new(phrase)))
-    }
-
-    pub(crate) fn expose(&self) -> &Keypair {
-        &self.0
-    }
-}
+use crate::{Reflection, SolanaCluster};
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct SolanaWalletAccount<'wa> {

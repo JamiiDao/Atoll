@@ -1,126 +1,112 @@
-use wallet_standard_base::{SemverVersion, Wallet, WalletStandardIcon};
+use std::{borrow::Cow, collections::HashMap};
 
-use crate::SolanaWalletAccount;
+use bip39::{Language, Mnemonic, MnemonicType};
+use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
+use solana_seed_derivable::SeedDerivable;
 
-/// Wallet information without any browser function calls for `wallet-adapter` standard operations
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct SolanaWallet<'wa> {
-    label: &'static str,
-    version: SemverVersion,
-    icon: Option<WalletStandardIcon>,
-    accounts: Vec<SolanaWalletAccount<'wa>>,
-    mainnet_enabled: bool,
+use solana_signer::Signer;
+use zeroize::Zeroizing;
+
+use crate::{AtollWalletError, AtollWalletResult, SolanaWalletAccount};
+
+const TEST_PASSPHRASE: &str = "quick brown fox";
+
+const TEST_MNEMONIC: &str =
+    "wrap kingdom punch clog kiss useless celery exist bulk catch share creek";
+
+pub struct SolanaAccountKeypair {
+    keypair: Keypair,
+    active_dapps: HashMap<blake3::Hash, ActiveDapp>,
 }
 
-impl<'wa> SolanaWallet<'wa> {
-    /// Instantiate a new [WalletData]
-    pub fn new(label: &'static str) -> Self {
-        Self {
-            label,
-            ..Default::default()
-        }
+impl SolanaAccountKeypair {
+    pub(crate) fn new_test() -> AtollWalletResult<Self> {
+        Self::new_from_mnemonic(
+            Zeroizing::new(TEST_MNEMONIC.to_string()),
+            Some(Zeroizing::new(TEST_PASSPHRASE.to_string())),
+        )
     }
 
-    /// Set the [Semver version](SemverVersion) of the wallet
-    pub fn set_version(mut self, version: SemverVersion) -> Self {
-        self.version = version;
+    pub(crate) fn new_from_mnemonic(
+        mnemonic: Zeroizing<String>,
+        passphrase: Option<Zeroizing<String>>,
+    ) -> AtollWalletResult<Self> {
+        let mnemonic = Mnemonic::from_phrase(&mnemonic, Language::English)?;
 
-        self
+        let phrase: &str = mnemonic.phrase();
+
+        let keypair =
+            Keypair::from_seed_phrase_and_passphrase(phrase, &passphrase.unwrap_or_default())
+                .map_err(|error| {
+                    AtollWalletError::UnableToConvertMnemonicToKeypair(error.to_string())
+                })?;
+
+        Ok(Self {
+            keypair,
+            active_dapps: HashMap::default(),
+        })
     }
 
-    /// Set the icon of the wallet.
-    /// Should be in Base64 URL web format `data:image/${'svg+xml' | 'webp' | 'png' | 'gif'};base64,${string}`
-    pub fn set_icon(mut self, icon: WalletStandardIcon) -> Self {
-        self.icon.replace(icon);
+    pub(crate) fn new(
+        passphrase: Option<Zeroizing<String>>,
+    ) -> AtollWalletResult<(Self, Zeroizing<String>)> {
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 
-        self
+        let phrase = mnemonic.phrase().to_owned();
+
+        let keypair =
+            Keypair::from_seed_phrase_and_passphrase(&phrase, &passphrase.unwrap_or_default())
+                .map_err(|error| {
+                    AtollWalletError::UnableToConvertMnemonicToKeypair(error.to_string())
+                })?;
+
+        Ok((
+            Self {
+                keypair,
+                active_dapps: HashMap::default(),
+            },
+            Zeroizing::new(phrase),
+        ))
     }
 
-    /// Add a [Wallet account](WalletAccountData) data
-    pub fn add_account(mut self, account: SolanaWalletAccount<'wa>) -> Self {
-        self.accounts.push(account);
-
-        self
+    pub(crate) fn pubkey(&self) -> Pubkey {
+        self.keypair.pubkey()
     }
 
-    /// Add multiple [Wallet account](WalletAccountData) data(s)
-    pub fn add_accounts(mut self, accounts: &[SolanaWalletAccount<'wa>]) -> Self {
-        self.accounts.extend_from_slice(accounts);
+    pub fn standard_connect<'wa>(&'wa mut self, uri: String) -> SolanaWalletAccount<'wa> {
+        let (active_dapp, hash) = ActiveDapp::new(uri);
+        self.active_dapps.insert(hash, active_dapp);
 
-        self
+        let public_key = self.pubkey().to_bytes();
+
+        SolanaWalletAccount::new(public_key)
     }
 
-    /// Replace all [Wallet account](WalletAccountData) data
-    pub fn replace_accounts(mut self, accounts: Vec<SolanaWalletAccount<'wa>>) -> Self {
-        self.accounts = accounts;
+    pub fn get_wallet_account<'wa>(&'wa self) -> SolanaWalletAccount<'wa> {
+        let public_key = self.pubkey().to_bytes();
 
-        self
-    }
-
-    /// Add a [Cluster]
-    pub fn enable_mainnet(&'wa mut self) -> &'wa mut Self {
-        self.mainnet_enabled = true;
-
-        self
-    }
-
-    /// Add a [Cluster]
-    pub fn disable_mainnet(&'wa mut self) -> &'wa mut Self {
-        self.mainnet_enabled = false;
-
-        self
-    }
-
-    /// Get the accounts provided by the wallet
-    pub fn accounts(&self) -> &[SolanaWalletAccount<'wa>] {
-        &self.accounts
-    }
-}
-
-impl<'wa> Wallet for SolanaWallet<'wa> {
-    fn label(&self) -> &str {
-        self.label
-    }
-
-    fn version(&self) -> SemverVersion {
-        self.version
-    }
-
-    fn icon(&self) -> Option<WalletStandardIcon> {
-        self.icon
-    }
-}
-
-impl<'wa> core::fmt::Debug for SolanaWallet<'wa> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Wallet")
-            .field("name", &self.label)
-            .field("version", &self.version)
-            .field("icon", &self.icon)
-            .field("accounts", &self.accounts)
-            .field("mainnet_enabled", &self.mainnet_enabled)
-            .finish()
+        SolanaWalletAccount::new(public_key)
     }
 }
 
-impl<'wa> PartialOrd for SolanaWallet<'wa> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct ActiveDapp {
+    uri: Cow<'static, str>,
+    sign_in: Option<SignInValues>,
+}
+
+impl ActiveDapp {
+    pub fn new(uri: String) -> (Self, blake3::Hash) {
+        let hash = blake3::hash(uri.as_bytes());
+        let new_self = Self {
+            uri: Cow::Owned(uri),
+            sign_in: Option::default(),
+        };
+
+        (new_self, hash)
     }
 }
 
-impl<'wa> Ord for SolanaWallet<'wa> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.label
-            .as_bytes()
-            .cmp(other.label.as_bytes())
-            .then(self.version.cmp(&other.version))
-    }
-}
-
-impl<'wa> core::hash::Hash for SolanaWallet<'wa> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.label.as_bytes().hash(state);
-        self.version.hash(state);
-    }
-}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct SignInValues;

@@ -33,6 +33,8 @@ pub enum AtollWalletError {
     ResourceNotFoundInMessageObject,
     #[error("The mnemonic provided to reconstruct the Solana Keypair is invalid")]
     UnableToRecoverSolanaKeypairFromMnemonic,
+    #[error("A request was made to authorize a dapp but a keypair doesn't exist yet")]
+    UnauthorizedKeypairRequest,
 }
 
 #[derive(Debug, PartialEq)]
@@ -79,5 +81,11 @@ impl WasmOutcome {
 impl From<bip39::ErrorKind> for AtollWalletError {
     fn from(value: bip39::ErrorKind) -> Self {
         Self::Bip39(value.to_string())
+    }
+}
+
+impl From<AtollWalletError> for JsValue {
+    fn from(value: AtollWalletError) -> Self {
+        JsValue::from_str(value.to_string().as_str())
     }
 }

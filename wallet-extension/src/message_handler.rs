@@ -1,4 +1,4 @@
-use std::panic;
+use std::{cell::RefCell, panic, rc::Rc};
 
 use wasm_bindgen::prelude::*;
 use web_sys::{
@@ -6,13 +6,18 @@ use web_sys::{
     js_sys::{self, Function, Reflect},
 };
 
-use crate::{
-    AtollWalletError, AtollWalletResult, Reflection, SolanaConstants, WasmOutcome, standard_connect,
-};
+use crate::{App, AtollWalletError, AtollWalletResult, Reflection, SolanaConstants, WasmOutcome};
+
+pub type AppManager = Rc<RefCell<App>>;
 
 #[wasm_bindgen]
 pub fn app(extension: JsValue) {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    let mut app = App::new();
+    app.load_test_keypairs().unwrap();
+
+    let app: AppManager = Rc::new(RefCell::new(app));
 
     let runtime = Reflect::get(&extension, &JsValue::from_str("runtime")).unwrap_or_else(|_| {
         panic!(
@@ -46,7 +51,8 @@ pub fn app(extension: JsValue) {
 
     let send_response_callback = Closure::wrap(Box::new(
         move |message: JsValue, _sender: JsValue, send_response: JsValue| {
-            let processed_message = match_message(message);
+            let processed_message = match_message(message, app.clone());
+
             let reply = WasmOutcome::new(processed_message);
 
             let send_response_fn = send_response
@@ -71,7 +77,7 @@ pub fn app(extension: JsValue) {
     send_response_callback.forget();
 }
 
-fn match_message(message: JsValue) -> AtollWalletResult<JsValue> {
+fn match_message(message: JsValue, app: AppManager) -> AtollWalletResult<JsValue> {
     let message_object = Reflection::new_object_from_js_value(message)?;
 
     let resource_js_value = message_object.get_object(
@@ -84,7 +90,7 @@ fn match_message(message: JsValue) -> AtollWalletResult<JsValue> {
     let resource: ExtensionMessage = resource_js_value.as_ref().try_into()?;
 
     match resource {
-        ExtensionMessage::StandardConnect => standard_connect(&data),
+        ExtensionMessage::StandardConnect => app.borrow_mut().standard_connect(&data),
     }
 }
 

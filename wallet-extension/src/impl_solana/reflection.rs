@@ -5,6 +5,8 @@
 //         )
 //         .or(Err(AtollWalletError::UnableToSetWalletAccountAddress))?;
 
+use core::panic;
+
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
     console,
@@ -76,13 +78,54 @@ impl Reflection {
                 &error,
                 &"`. Try using `set_object` instead which returns an error you can handle.".into(),
             );
+            panic!()
         }
+
+        self
+    }
+
+    /// This panics if not handled properly
+    pub fn define_property_secure(&self, property: &str, descriptor: &js_sys::Object) -> &Self {
+        if !self.0.is_object() {
+            console::log_7(
+                &"AtollWallet > `".into(),
+                &self.0,
+                &"` is not an object therefore cannot define a property. `".into(),
+                &property.into(),
+                &"`. with descriptor `".into(),
+                descriptor,
+                &"`.".into(),
+            );
+
+            panic!()
+        }
+
+        js_sys::Object::define_property(&self.0.clone().into(), &property.into(), descriptor);
 
         self
     }
 
     pub fn get_object(&self, key: &str, error: AtollWalletError) -> AtollWalletResult<JsValue> {
         Reflect::get(&self.0, &key.into()).or(Err(error))
+    }
+
+    pub fn get_object_secure(&self, key: &str) -> JsValue {
+        match Reflect::get(&self.0, &key.into()) {
+            Ok(value) => value,
+            Err(error) => {
+                console::log_7(
+                    &"AtollWallet > Unable to get object for key `".into(),
+                    &key.into(),
+                    &"` for js_sys::Object > `".into(),
+                    &self.0,
+                    &"`. Js Error: `".into(),
+                    &error,
+                    &"`.".into(),
+                );
+
+                panic!()
+            }
+        }
     }
 
     pub fn take(self) -> JsValue {
