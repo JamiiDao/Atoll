@@ -89,7 +89,7 @@
 
       #on = (event, listener) => {
         console.log("EVENT", event);
-        console.log("EVENT_LISTNER", listener);
+        console.log("EVENT_LISTENER", listener);
         this.#listeners[event]?.push(listener) ||
           (this.#listeners[event] = [listener]);
         return () => this.#off(event, listener);

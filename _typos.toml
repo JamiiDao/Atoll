@@ -1,0 +1,2 @@
+[files]
+extend-exclude = ["wallet-extension/extension/wasm/*"]

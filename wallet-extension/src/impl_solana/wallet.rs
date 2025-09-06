@@ -48,7 +48,7 @@ impl SolanaAccountKeypair {
         })
     }
 
-    pub(crate) fn new(
+    pub(crate) fn _new(
         passphrase: Option<Zeroizing<String>>,
     ) -> AtollWalletResult<(Self, Zeroizing<String>)> {
         let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
