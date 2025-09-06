@@ -18,7 +18,6 @@ mod reflection;
 pub use reflection::*;
 
 mod interface;
-pub use interface::*;
 
 mod constants;
 pub use constants::*;

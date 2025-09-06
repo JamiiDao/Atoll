@@ -1,6 +1,6 @@
 use wallet_standard_base::StandardFeatures;
 
-/// https://github.com/wallet-standard/wallet-standard/blob/master/extensions/bitcoin.md
+/// [Bitcoin Extension](https://github.com/wallet-standard/wallet-standard/blob/master/extensions/bitcoin.md)
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct StandardFeaturesBitcoin {
     sign_in: bool,
