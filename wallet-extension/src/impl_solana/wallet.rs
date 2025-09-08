@@ -20,7 +20,7 @@ pub struct SolanaAccountKeypair {
     active_dapps: HashMap<blake3::Hash, ActiveDapp>,
 }
 
-impl SolanaAccountKeypair {
+impl<'wa> SolanaAccountKeypair {
     pub(crate) fn new_test() -> AtollWalletResult<Self> {
         Self::new_from_mnemonic(
             Zeroizing::new(TEST_MNEMONIC.to_string()),
@@ -74,7 +74,7 @@ impl SolanaAccountKeypair {
         self.keypair.pubkey()
     }
 
-    pub fn standard_connect<'wa>(&'wa mut self, uri: String) -> SolanaWalletAccount<'wa> {
+    pub fn standard_connect(&'wa mut self, uri: String) -> SolanaWalletAccount<'wa> {
         let (active_dapp, hash) = ActiveDapp::new(uri);
         self.active_dapps.insert(hash, active_dapp);
 
@@ -83,7 +83,13 @@ impl SolanaAccountKeypair {
         SolanaWalletAccount::new(public_key)
     }
 
-    pub fn get_wallet_account<'wa>(&'wa self) -> SolanaWalletAccount<'wa> {
+    pub fn sign_in(&'wa mut self, formatted_input: &str) -> (SolanaWalletAccount<'wa>, [u8; 64]) {
+        let signature = self.keypair.sign_message(formatted_input.as_bytes());
+
+        (self.get_wallet_account(), *signature.as_array())
+    }
+
+    pub fn get_wallet_account(&'wa self) -> SolanaWalletAccount<'wa> {
         let public_key = self.pubkey().to_bytes();
 
         SolanaWalletAccount::new(public_key)

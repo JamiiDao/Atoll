@@ -10,9 +10,15 @@
   const STANDARD_CONNECT = "standard:connect";
   const RELAY_STANDARD_CONNECT = "relay:standard:connect";
 
+  const RELAY_SOLANA_SIGN_IN = "relay:solana:signIn";
+  const SOLANA_SIGN_IN = "solana:signIn";
+
   function injectPageWallet(walletInfo) {
     const STANDARD_CONNECT = "standard:connect";
     const RELAY_STANDARD_CONNECT = "relay:standard:connect";
+
+    const RELAY_SOLANA_SIGN_IN = "relay:solana:signIn";
+    const SOLANA_SIGN_IN = "solana:signIn";
 
     const WALLET_REGISTER_EVENT = "wallet-standard:register-wallet";
     const APP_READY_EVENT = "wallet-standard:app-ready";
@@ -170,14 +176,26 @@
         ];
       };
       #signIn = async (...inputs) => {
-        console.log("SIGN IN", ...inputs);
-        return [
-          {
-            account: walletAccount,
-            signedMessage: new Uint8Array([13, 14, 15]),
-            signature: new Uint8Array([16, 17, 18]),
-          },
-        ];
+        const result = await new Promise((resolve, reject) => {
+          const listener = (event) => {
+            if (event.source !== window) return;
+            if (event.data.type === RELAY_SOLANA_SIGN_IN) {
+              window.removeEventListener("message", listener);
+
+              if (event.data.failure) reject(new Error(event.data.failure));
+              else resolve(event.data.success);
+            }
+          };
+          window.addEventListener("message", listener);
+
+          // Send request → content.js
+          window.postMessage(
+            { type: SOLANA_SIGN_IN, requestData: inputs[0], text: "" },
+            "*"
+          );
+        });
+
+        return result;
       };
     }
 
@@ -213,6 +231,29 @@
           window.postMessage(
             {
               type: RELAY_STANDARD_CONNECT,
+              success: response.success,
+              failure: response.failure,
+            },
+            "*"
+          );
+        }
+      );
+    }
+  });
+
+  window.addEventListener("message", (event) => {
+    console.log("SignIn event:", event);
+
+    if (event.source !== window) return;
+    if (event.data.type === SOLANA_SIGN_IN) {
+      extension.runtime.sendMessage(
+        { resource: event.data.type, data: event.data },
+        (response) => {
+          console.log("Content script got response from background:", response);
+          // Relay back under RELAY_STANDARD_CONNECT
+          window.postMessage(
+            {
+              type: RELAY_SOLANA_SIGN_IN,
               success: response.success,
               failure: response.failure,
             },

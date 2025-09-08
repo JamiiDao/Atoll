@@ -1,10 +1,3 @@
-//  Reflect::set(
-//             &wallet_account_object,
-//             &"address".into(),
-//             &self.address.as_ref().into(),
-//         )
-//         .or(Err(AtollWalletError::UnableToSetWalletAccountAddress))?;
-
 use core::panic;
 
 use wasm_bindgen::{JsCast, JsValue};
@@ -109,6 +102,10 @@ impl Reflection {
         Reflect::get(&self.0, &key.into()).or(Err(error))
     }
 
+    pub fn get_object_or_undefined(&self, key: &str) -> Option<JsValue> {
+        Reflect::get(&self.0, &key.into()).ok()
+    }
+
     pub fn get_object_secure(&self, key: &str) -> JsValue {
         match Reflect::get(&self.0, &key.into()) {
             Ok(value) => value,
@@ -126,6 +123,12 @@ impl Reflection {
                 panic!()
             }
         }
+    }
+
+    pub fn reflect_string_or_undefined(&self, key: &str) -> Option<String> {
+        let js_value_string = self.get_object_or_undefined(key);
+
+        js_value_string.map(|value| value.as_string())?
     }
 
     pub fn take(self) -> JsValue {

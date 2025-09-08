@@ -37,7 +37,7 @@ impl Cluster for SolanaCluster {
     fn endpoint(&self) -> &str {
         match self {
             Self::Mainnet => SolanaConstants::MAINNET_ENDPOINT,
-            Self::Testnet => SolanaConstants::TESTNET_IDENTIFIER,
+            Self::Testnet => SolanaConstants::TESTNET_ENDPOINT,
             Self::Devnet => SolanaConstants::DEVNET_ENDPOINT,
             Self::Localnet => SolanaConstants::LOCALNET_ENDPOINT,
         }
@@ -50,5 +50,28 @@ impl Cluster for SolanaCluster {
             SolanaConstants::DEVNET_CHAIN,
             SolanaConstants::LOCALNET_CHAIN,
         ]
+    }
+}
+
+impl From<&str> for SolanaCluster {
+    fn from(value: &str) -> Self {
+        match value {
+            SolanaConstants::MAINNET_IDENTIFIER => Self::Mainnet,
+            SolanaConstants::TESTNET_IDENTIFIER => Self::Testnet,
+            SolanaConstants::DEVNET_IDENTIFIER => Self::Devnet,
+            SolanaConstants::LOCALNET_IDENTIFIER => Self::Localnet,
+
+            SolanaConstants::MAINNET_CHAIN => Self::Mainnet,
+            SolanaConstants::TESTNET_CHAIN => Self::Testnet,
+            SolanaConstants::DEVNET_CHAIN => Self::Devnet,
+            SolanaConstants::LOCALNET_CHAIN => Self::Localnet,
+
+            SolanaConstants::MAINNET_ENDPOINT => Self::Mainnet,
+            SolanaConstants::TESTNET_ENDPOINT => Self::Testnet,
+            SolanaConstants::DEVNET_ENDPOINT => Self::Devnet,
+            SolanaConstants::LOCALNET_ENDPOINT => Self::Localnet,
+
+            _ => Self::Devnet,
+        }
     }
 }
