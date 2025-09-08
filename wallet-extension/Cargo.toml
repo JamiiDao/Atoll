@@ -13,7 +13,7 @@ bs58 = { version = "0.5.1", default-features = false }
 console_error_panic_hook = "0.1.7"
 getrandom = { version = "0.3.3", features = ["wasm_js"] }
 thiserror = "2.0.16"
-wallet-standard-base = { version = "0.1.4", features = ["getrandom"] }
+wallet-standard-base = { version = "0.1.7", features = ["getrandom"] }
 bincode = "1"
 solana-keypair = { version = "2", default-features = false, features = [
     "seed-derivable",
@@ -42,3 +42,4 @@ web-sys = { workspace = true, features = [
 ] }
 zeroize = "1.8.1"
 blake3 = { version = "1.8.2", default-features = false }
+humantime = "2.2.0"

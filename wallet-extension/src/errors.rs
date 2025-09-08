@@ -21,6 +21,8 @@ pub enum AtollWalletError {
     ExtensionRuntimeMessageAddListenerIsMissing,
     #[error("{0}")]
     JsCast(String),
+    #[error("{0}")]
+    Input(String),
     #[error("The message `{0}` from `extension.runtime.onMessage.addListener` is not supported")]
     UnsupportedExtensionMessage(String),
     #[error(
@@ -35,6 +37,8 @@ pub enum AtollWalletError {
     UnableToRecoverSolanaKeypairFromMnemonic,
     #[error("A request was made to authorize a dapp but a keypair doesn't exist yet")]
     UnauthorizedKeypairRequest,
+    #[error("The `{0}` timestamp is not a valid ISO8601 timestamp.")]
+    InvalidIS08601Timestamp(String),
 }
 
 #[derive(Debug, PartialEq)]

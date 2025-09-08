@@ -91,12 +91,14 @@ fn match_message(message: JsValue, app: AppManager) -> AtollWalletResult<JsValue
 
     match resource {
         ExtensionMessage::StandardConnect => app.borrow_mut().standard_connect(&data),
+        ExtensionMessage::SolanaSignIn => app.borrow_mut().solana_sign_in(data),
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum ExtensionMessage {
     StandardConnect,
+    SolanaSignIn,
 }
 
 impl TryFrom<&JsValue> for ExtensionMessage {
@@ -109,6 +111,7 @@ impl TryFrom<&JsValue> for ExtensionMessage {
         ))?;
         let matched = match parsed_js_value.as_str() {
             SolanaConstants::STANDARD_CONNECT => Self::StandardConnect,
+            SolanaConstants::SIGN_IN => Self::SolanaSignIn,
             _ => {
                 return Err(AtollWalletError::UnsupportedExtensionMessage(
                     parsed_js_value,
