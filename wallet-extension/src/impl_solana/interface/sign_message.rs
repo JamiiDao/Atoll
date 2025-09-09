@@ -51,18 +51,18 @@ impl App {
             .active_keypair()?
             .sign_message(&public_key, &message_bytes);
 
-        let sign_in_output = Reflection::new_object();
+        let signed_message_output = Reflection::new_object();
 
         let signed_message = Uint8Array::new_from_slice(message_bytes.as_slice());
-        sign_in_output.set_object_secure("signedMessage", &signed_message);
+        signed_message_output.set_object_secure("signedMessage", &signed_message);
 
         let signature = Uint8Array::new_from_slice(&signature);
-        sign_in_output.set_object_secure("signature", &signature);
+        signed_message_output.set_object_secure("signature", &signature);
 
-        sign_in_output.set_object_secure("signatureType", &"ed25519".into());
+        signed_message_output.set_object_secure("signatureType", &"ed25519".into());
 
         let output_array = Array::new();
-        output_array.push(&sign_in_output.take());
+        output_array.push(&signed_message_output.take());
 
         Ok(output_array.into())
     }
