@@ -86,7 +86,16 @@ impl<'wa> SolanaAccountKeypair {
     pub fn sign_in(&'wa mut self, formatted_input: &str) -> (SolanaWalletAccount<'wa>, [u8; 64]) {
         let signature = self.keypair.sign_message(formatted_input.as_bytes());
 
+        // TODO add to active dapps and add dapp icon too
+
         (self.get_wallet_account(), *signature.as_array())
+    }
+
+    // TODO type checks to see if a dapp is currently authorized to perform an operation
+    pub fn sign_message(&mut self, public_key: &[u8; 32], message: &[u8]) -> [u8; 64] {
+        let signature = self.keypair.sign_message(message);
+
+        *signature.as_array()
     }
 
     pub fn get_wallet_account(&'wa self) -> SolanaWalletAccount<'wa> {
