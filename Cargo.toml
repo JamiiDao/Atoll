@@ -19,4 +19,9 @@ web-sys = { version = "0.3.77", features = [
     "Event",
     "MessageEvent",
     "EventListener",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Headers",
 ] }

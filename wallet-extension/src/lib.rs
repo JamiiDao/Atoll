@@ -10,6 +10,9 @@ pub use impl_bitcoin::*;
 mod errors;
 pub use errors::*;
 
+mod browser_fetch;
+pub use browser_fetch::*;
+
 mod app;
 pub use app::*;
 

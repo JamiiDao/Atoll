@@ -14,7 +14,6 @@ console_error_panic_hook = "0.1.7"
 getrandom = { version = "0.3.3", features = ["wasm_js"] }
 thiserror = "2.0.16"
 wallet-standard-base = { version = "0.1.7", features = ["getrandom"] }
-bincode = "1"
 solana-keypair = { version = "2", default-features = false, features = [
     "seed-derivable",
 ] }
@@ -22,7 +21,7 @@ solana-pubkey = { version = "=2", features = ["curve25519"] }
 solana-seed-derivable = "=2"
 solana-seed-phrase = "=2"
 solana-signer = "=2"
-solana-transaction = { version = "=2", features = ["dev-context-only-utils"] }
+solana-transaction = { version = "2.2.3", features = ["dev-context-only-utils"] }
 tiny-bip39 = { version = "2.0.0", default-features = false, features = [
     "rand",
 ] }
@@ -43,3 +42,5 @@ web-sys = { workspace = true, features = [
 zeroize = "1.8.1"
 blake3 = { version = "1.8.2", default-features = false }
 humantime = "2.2.0"
+solana-hash = { version = "3.0.0", features = ["serde"] }
+bincode = "1"

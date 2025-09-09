@@ -6,6 +6,10 @@ use solana_pubkey::Pubkey;
 use solana_seed_derivable::SeedDerivable;
 
 use solana_signer::Signer;
+use solana_transaction::Transaction;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Headers, RequestInit};
 use zeroize::Zeroizing;
 
 use crate::{AtollWalletError, AtollWalletResult, SolanaWalletAccount};
@@ -98,6 +102,18 @@ impl<'wa> SolanaAccountKeypair {
         *signature.as_array()
     }
 
+    // TODO type checks to see if a dapp is currently authorized to perform an operation
+    pub fn sign_transaction(
+        &mut self,
+        public_key: &[u8; 32],
+        mut transaction: Transaction,
+    ) -> Transaction {
+        let recent_blockhash = transaction.message.hash();
+        transaction.sign(&[&self.keypair], recent_blockhash);
+
+        transaction
+    }
+
     pub fn get_wallet_account(&'wa self) -> SolanaWalletAccount<'wa> {
         let public_key = self.pubkey().to_bytes();
 
@@ -125,3 +141,22 @@ impl ActiveDapp {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct SignInValues;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RecentBlockHashAtoll {
+    pub blockhash: solana_hash::Hash,
+}
+
+impl RecentBlockHashAtoll {}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ResultAtoll<T: core::fmt::Debug> {
+    pub value: T,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RpcOutcome<T: core::fmt::Debug> {
+    pub jsonrpc: String,
+    pub result: ResultAtoll<T>,
+    pub id: u8,
+}
