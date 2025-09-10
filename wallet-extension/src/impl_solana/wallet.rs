@@ -118,14 +118,15 @@ impl<'wa> SolanaAccountKeypair {
     }
 
     // TODO type checks to see if a dapp is currently authorized to perform an operation
+    // TODO Use getSignatureStatuses to ensure a transaction is processed and confirmed.
     pub async fn sign_and_send_transaction(
         &self,
         _public_key: [u8; 32],
         mut transaction: Transaction,
         send_options: crate::SendOptions,
+        recent_blockhash: solana_hash::Hash,
         cluster: SolanaCluster,
-    ) -> AtollWalletResult<JsValue> {
-        let recent_blockhash = transaction.message.hash();
+    ) -> AtollWalletResult<String> {
         transaction.sign(&[&self.keypair], recent_blockhash);
 
         let mut fetch = BrowserFetch::new()?;
@@ -133,6 +134,7 @@ impl<'wa> SolanaAccountKeypair {
         let signed_transaction_bytes = bincode::serialize(&transaction).or(Err(
             AtollWalletError::Input("Unable to convert the signed transaction into bytes for `solana:signAndSendTransaction`".to_string())
         ))?;
+
         let encoded_signed_transaction = Base64::encode_string(&signed_transaction_bytes);
         let json_body = jzon::object! {
           "jsonrpc": "2.0",
@@ -146,21 +148,22 @@ impl<'wa> SolanaAccountKeypair {
         .to_string();
         fetch.set_body(&json_body);
 
-        match fetch.send(cluster.endpoint()).await {
-            Err(error) => Err(error.into()),
-            Ok(success) => {
-                let success = success.json().or(Err(AtollWalletError::JsCast("Unable to get the JSON body after the response was send in `solana:sendAndSignTransaction`".to_string())));
-                match success {
-                    Err(error) => Err(error.into()),
-                    Ok(success_response) => {
-                        JsFuture::from(success_response)
-                                .await
-                                .or( Err(
-                                    AtollWalletError::JsCast("Unable to resolve the json body from the RPC response in `solana:sendAndSignTransaction`".to_string())))
-                    }
-                }
-            }
-        }
+        let success = fetch
+            .send(cluster.endpoint())
+            .await?
+            .text()
+            .map_err(|error| {
+                AtollWalletError::JsCast(format!(
+                    "Unable to get the text from response body: Error: {error:?}"
+                ))
+            })?;
+        let success = JsFuture::from(success).await.or(
+            Err(AtollWalletError::JsCast("Unable to get the JSON body after the response was send in `solana:sendAndSignTransaction`".to_string()))
+        )?;
+
+        let success = success.as_string().ok_or(AtollWalletError::JsCast("Unable to get the JSON body after the response was send in `solana:sendAndSignTransaction`".to_string()))?;
+
+        Ok(success)
     }
 
     pub fn get_wallet_account(&'wa self) -> SolanaWalletAccount<'wa> {
@@ -203,6 +206,7 @@ impl SendOptions {
         Self::default()
     }
 
+    // TODO parse minContextSlot
     pub fn parse(&mut self, options_js_value: JsValue) -> &mut Self {
         if let Ok(options_object) = Reflection::new_object_from_js_value(options_js_value)
             && let Ok(preflight_commitment) = options_object.get_object(

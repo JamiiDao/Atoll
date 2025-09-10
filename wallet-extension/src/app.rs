@@ -13,7 +13,7 @@ pub(crate) struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self::default()
     }
 
@@ -29,13 +29,13 @@ impl App {
         })
     }
 
-    pub fn set_active(&mut self, keypair: &SolanaAccountKeypair) -> &mut Self {
+    pub fn _set_active(&mut self, keypair: &SolanaAccountKeypair) -> &mut Self {
         self.active = Arc::new(RwLock::new(Self::hash_active(keypair)));
 
         self
     }
 
-    pub fn set_active_with_hash(&mut self, hash: blake3::Hash) -> &mut Self {
+    pub fn _set_active_with_hash(&mut self, hash: blake3::Hash) -> &mut Self {
         self.active = Arc::new(RwLock::new(hash));
 
         self
@@ -45,11 +45,11 @@ impl App {
         blake3::hash(&keypair.pubkey().to_bytes())
     }
 
-    pub async fn get_active_hash(&self) -> blake3::Hash {
+    pub async fn _get_active_hash(&self) -> blake3::Hash {
         *self.active.read().await
     }
 
-    pub async fn keypair_op(
+    pub async fn _keypair_op(
         &mut self,
     ) -> async_lock::RwLockWriteGuard<'_, HashMap<blake3::Hash, SolanaAccountKeypair>> {
         self.keypairs.write().await

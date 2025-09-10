@@ -134,7 +134,6 @@
         if (this.#account) this.#emit("change", { accounts: this.accounts });
       };
       #disconnected = () => {
-        console.log("called disconnect");
         if (this.#account) {
           this.#account = null;
           this.#emit("change", { accounts: this.accounts });
@@ -171,7 +170,6 @@
           relayType: RELAY_SIGN_AND_SEND_TRANSACTION,
           requestData: inputs[0],
         });
-
         return result;
       };
       #signTransaction = async (...inputs) => {
@@ -227,12 +225,17 @@
 
     const wallet = new AtollWallet();
 
+    let registered = false;
+
     // Register wallet when app is ready
     window.addEventListener(APP_READY_EVENT, () => {
       const callback = (api) => api.register(wallet);
-      window.dispatchEvent(
-        new CustomEvent(WALLET_REGISTER_EVENT, { detail: callback })
-      );
+      if (!registered) {
+        registered = true;
+        window.dispatchEvent(
+          new CustomEvent(WALLET_REGISTER_EVENT, { detail: callback })
+        );
+      }
     });
   }
 
@@ -270,25 +273,10 @@
     getData: (event) => event.data,
   });
 
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    if (event.data.type === SOLANA_SIGN_AND_SEND_TRANSACTION) {
-      extension.runtime.sendMessage(
-        { resource: event.data.type, data: event.data },
-        (response) => {
-          console.log("Content script got response from background:", response);
-          // Relay back under RELAY_STANDARD_CONNECT
-          window.postMessage(
-            {
-              type: RELAY_SIGN_AND_SEND_TRANSACTION,
-              success: response.success,
-              failure: response.failure,
-            },
-            "*"
-          );
-        }
-      );
-    }
+  setupRelayListener({
+    requestType: SOLANA_SIGN_AND_SEND_TRANSACTION,
+    relayType: RELAY_SIGN_AND_SEND_TRANSACTION,
+    getData: (event) => event.data,
   });
 
   function setupRelayListener({ requestType, relayType, getData }) {
