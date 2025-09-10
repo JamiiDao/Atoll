@@ -43,7 +43,7 @@ impl BrowserFetch {
     pub async fn send(self, url: &str) -> AtollWalletResult<web_sys::Response> {
         self.options.set_headers(&self.headers);
 
-        let request = web_sys::Request::new_with_str_and_init(&url, &self.options).or(Err(
+        let request = web_sys::Request::new_with_str_and_init(url, &self.options).or(Err(
             AtollWalletError::Input("Unable to construct a request to send to an RPC".to_string()),
         ))?;
 

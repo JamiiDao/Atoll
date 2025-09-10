@@ -3,11 +3,16 @@ use wasm_bindgen::{JsCast, JsValue};
 use web_sys::js_sys::{self, Array, Uint8Array};
 
 use crate::{
-    App, AtollWalletError, AtollWalletResult, Reflection, SolanaConstants, app_console_log,
+    App, AtollWalletError, AtollWalletResult, KeypairOps, Reflection, SolanaConstants,
+    app_console_log,
 };
 
 impl App {
-    pub fn solana_sign_transaction(&mut self, data: JsValue) -> AtollWalletResult<JsValue> {
+    pub async fn solana_sign_transaction(
+        active_hash: blake3::Hash,
+        keypair_ops: KeypairOps,
+        data: JsValue,
+    ) -> AtollWalletResult<JsValue> {
         app_console_log(SolanaConstants::SIGN_TRANSACTION, &data);
         let data = Reflection::new_object_from_js_value(data)?;
 
@@ -55,22 +60,25 @@ impl App {
             AtollWalletError::Input("Transaction for `solana:signTransaction` is invalid. Try constructing the transaction correctly!".to_string())
         ))?;
 
-        let signed_transaction = self
-            .active_keypair()?
-            .sign_transaction(&public_key, transaction);
-        let signed_transaction_bytes = bincode::serialize(&signed_transaction).or(Err(
-            AtollWalletError::Input("Unable to encode signed transaction".to_string()),
-        ))?;
+        if let Some(active_keypair) = keypair_ops.write().await.get_mut(&active_hash) {
+            let signed_transaction = active_keypair.sign_transaction(&public_key, transaction);
+            let signed_transaction_bytes = bincode::serialize(&signed_transaction).or(Err(
+                AtollWalletError::Input("Unable to encode signed transaction".to_string()),
+            ))?;
 
-        let signed_transaction_output = Reflection::new_object();
+            let signed_transaction_output = Reflection::new_object();
 
-        let signed_transaction_uint8array = Uint8Array::new_from_slice(&signed_transaction_bytes);
-        signed_transaction_output
-            .set_object_secure("signedTransaction", &signed_transaction_uint8array);
+            let signed_transaction_uint8array =
+                Uint8Array::new_from_slice(&signed_transaction_bytes);
+            signed_transaction_output
+                .set_object_secure("signedTransaction", &signed_transaction_uint8array);
 
-        let output_array = Array::new();
-        output_array.push(&signed_transaction_output.take());
+            let output_array = Array::new();
+            output_array.push(&signed_transaction_output.take());
 
-        Ok(output_array.into())
+            Ok(output_array.into())
+        } else {
+            Err(AtollWalletError::UnauthorizedKeypairRequest)
+        }
     }
 }

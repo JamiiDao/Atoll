@@ -1,23 +1,21 @@
-use std::{cell::RefCell, panic, rc::Rc};
+use std::panic;
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::future_to_promise;
 use web_sys::{
     console,
     js_sys::{self, Function, Reflect},
 };
 
-use crate::{App, AtollWalletError, AtollWalletResult, Reflection, SolanaConstants, WasmOutcome};
-
-pub type AppManager = Rc<RefCell<App>>;
+use crate::{ActiveHash, App, AtollWalletError, KeypairOps, Reflection, SolanaConstants};
 
 #[wasm_bindgen]
 pub fn app(extension: JsValue) {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    let mut app = App::new();
-    app.load_test_keypairs().unwrap();
-
-    let app: AppManager = Rc::new(RefCell::new(app));
+    let app = App::load_test_keypairs().unwrap();
+    let active_hash = app.active.clone();
+    let keypair_ops = app.keypairs.clone();
 
     let runtime = Reflect::get(&extension, &JsValue::from_str("runtime")).unwrap_or_else(|_| {
         panic!(
@@ -51,16 +49,18 @@ pub fn app(extension: JsValue) {
 
     let send_response_callback = Closure::wrap(Box::new(
         move |message: JsValue, _sender: JsValue, send_response: JsValue| {
-            let processed_message = match_message(message, app.clone());
+            let active_hash = active_hash.clone();
+            let keypair_ops = keypair_ops.clone();
 
-            let reply = WasmOutcome::new(processed_message);
+            let processed = async { match_message(message, active_hash, keypair_ops).await };
+            let reply = future_to_promise(processed);
 
             let send_response_fn = send_response
-                .dyn_into::<Function>()
-                .expect("Unable to convert a `sendResponse` for `extension.runtime.onMessage.addListener` to a js_sys::Function");
+                    .dyn_into::<Function>()
+                    .expect("Unable to convert a `sendResponse` for `extension.runtime.onMessage.addListener` to a js_sys::Function");
 
             send_response_fn
-                .call1(&JsValue::NULL, &reply.to_object())
+                .call1(&JsValue::NULL, &reply.into())
                 .expect("Unable to call `sendResponse`");
         },
     ) as Box<dyn FnMut(JsValue, JsValue, JsValue)>);
@@ -77,7 +77,11 @@ pub fn app(extension: JsValue) {
     send_response_callback.forget();
 }
 
-fn match_message(message: JsValue, app: AppManager) -> AtollWalletResult<JsValue> {
+async fn match_message(
+    message: JsValue,
+    active_hash: ActiveHash,
+    keypair_ops: KeypairOps,
+) -> Result<JsValue, JsValue> {
     let message_object = Reflection::new_object_from_js_value(message)?;
 
     let resource_js_value = message_object.get_object(
@@ -90,10 +94,25 @@ fn match_message(message: JsValue, app: AppManager) -> AtollWalletResult<JsValue
     let resource: ExtensionMessage = resource_js_value.as_ref().try_into()?;
 
     match resource {
-        ExtensionMessage::StandardConnect => app.borrow_mut().standard_connect(&data),
-        ExtensionMessage::SolanaSignIn => app.borrow_mut().solana_sign_in(data),
-        ExtensionMessage::SolanaSignMessage => app.borrow_mut().solana_sign_message(data),
-        ExtensionMessage::SolanaSignTransaction => app.borrow_mut().solana_sign_transaction(data),
+        ExtensionMessage::StandardConnect => {
+            Ok(App::standard_connect(*active_hash.read().await, keypair_ops, &data).await?)
+        }
+        ExtensionMessage::SolanaSignIn => {
+            Ok(App::solana_sign_in(*active_hash.read().await, keypair_ops, data).await?)
+        }
+
+        ExtensionMessage::SolanaSignMessage => {
+            Ok(App::solana_sign_message(*active_hash.read().await, keypair_ops, data).await?)
+        }
+        ExtensionMessage::SolanaSignTransaction => {
+            Ok(App::solana_sign_transaction(*active_hash.read().await, keypair_ops, data).await?)
+        }
+        // ExtensionMessage::SolanaSignAndSendTransaction => {
+        //     let data = app.write().await.solana_sign_and_transaction(data);
+
+        //     Ok(future_to_promise(data).into())
+        // }
+        _ => panic!(),
     }
 }
 
@@ -103,6 +122,7 @@ pub enum ExtensionMessage {
     SolanaSignIn,
     SolanaSignMessage,
     SolanaSignTransaction,
+    SolanaSignAndSendTransaction,
 }
 
 impl TryFrom<&JsValue> for ExtensionMessage {
@@ -118,6 +138,7 @@ impl TryFrom<&JsValue> for ExtensionMessage {
             SolanaConstants::SIGN_IN => Self::SolanaSignIn,
             SolanaConstants::SIGN_MESSAGE => Self::SolanaSignMessage,
             SolanaConstants::SIGN_TRANSACTION => Self::SolanaSignTransaction,
+            SolanaConstants::SIGN_AND_SEND_TRANSACTION => Self::SolanaSignAndSendTransaction,
             _ => {
                 return Err(AtollWalletError::UnsupportedExtensionMessage(
                     parsed_js_value,
