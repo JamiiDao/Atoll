@@ -7,7 +7,9 @@ use web_sys::{
     js_sys::{self, Function, Reflect},
 };
 
-use crate::{ActiveHash, App, AtollWalletError, KeypairOps, Reflection, SolanaConstants};
+use crate::{
+    ActiveHash, App, AtollWalletError, AtollWalletResult, KeypairOps, Reflection, SolanaConstants,
+};
 
 #[wasm_bindgen]
 pub fn app(extension: JsValue) {
@@ -52,7 +54,15 @@ pub fn app(extension: JsValue) {
             let active_hash = active_hash.clone();
             let keypair_ops = keypair_ops.clone();
 
-            let processed = async { match_message(message, active_hash, keypair_ops).await };
+            let processed = async {
+                match_message(message, active_hash, keypair_ops)
+                    .await
+                    .map_err(|value| {
+                        let value: JsValue = value.into();
+
+                        value
+                    })
+            };
             let reply = future_to_promise(processed);
 
             let send_response_fn = send_response
@@ -62,8 +72,11 @@ pub fn app(extension: JsValue) {
             send_response_fn
                 .call1(&JsValue::NULL, &reply.into())
                 .expect("Unable to call `sendResponse`");
+
+            JsValue::from_bool(true)
         },
-    ) as Box<dyn FnMut(JsValue, JsValue, JsValue)>);
+    )
+        as Box<dyn FnMut(JsValue, JsValue, JsValue) -> JsValue>);
 
     let send_response_callback_fn = send_response_callback
         .as_ref()
@@ -81,7 +94,7 @@ async fn match_message(
     message: JsValue,
     active_hash: ActiveHash,
     keypair_ops: KeypairOps,
-) -> Result<JsValue, JsValue> {
+) -> AtollWalletResult<JsValue> {
     let message_object = Reflection::new_object_from_js_value(message)?;
 
     let resource_js_value = message_object.get_object(
@@ -95,24 +108,21 @@ async fn match_message(
 
     match resource {
         ExtensionMessage::StandardConnect => {
-            Ok(App::standard_connect(*active_hash.read().await, keypair_ops, &data).await?)
+            App::standard_connect(*active_hash.read().await, keypair_ops, &data).await
         }
         ExtensionMessage::SolanaSignIn => {
-            Ok(App::solana_sign_in(*active_hash.read().await, keypair_ops, data).await?)
+            App::solana_sign_in(*active_hash.read().await, keypair_ops, data).await
         }
 
         ExtensionMessage::SolanaSignMessage => {
-            Ok(App::solana_sign_message(*active_hash.read().await, keypair_ops, data).await?)
+            App::solana_sign_message(*active_hash.read().await, keypair_ops, data).await
         }
         ExtensionMessage::SolanaSignTransaction => {
-            Ok(App::solana_sign_transaction(*active_hash.read().await, keypair_ops, data).await?)
+            App::solana_sign_transaction(*active_hash.read().await, keypair_ops, data).await
         }
-        // ExtensionMessage::SolanaSignAndSendTransaction => {
-        //     let data = app.write().await.solana_sign_and_transaction(data);
-
-        //     Ok(future_to_promise(data).into())
-        // }
-        _ => panic!(),
+        ExtensionMessage::SolanaSignAndSendTransaction => {
+            App::solana_sign_and_transaction(*active_hash.read().await, keypair_ops, data).await
+        }
     }
 }
 

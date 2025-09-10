@@ -20,6 +20,6 @@ impl StandardFeatures for SolanaWalletAccount<'_> {
     }
 
     fn sign_and_send_transaction(&self) -> &str {
-        SolanaConstants::SIGN_TRANSACTION
+        SolanaConstants::SIGN_AND_SEND_TRANSACTION
     }
 }
