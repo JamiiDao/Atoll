@@ -53,3 +53,14 @@ impl Commitment for SolanaCommitment {
         }
     }
 }
+
+impl From<&str> for SolanaCommitment {
+    fn from(value: &str) -> Self {
+        match value {
+            "processed" => Self::Processed,
+            "confirmed" => Self::Confirmed,
+            "finalized" => Self::Finalized,
+            _ => Self::Finalized,
+        }
+    }
+}

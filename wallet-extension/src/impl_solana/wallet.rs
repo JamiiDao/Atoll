@@ -1,18 +1,21 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use base64ct::{Base64, Encoding};
 use bip39::{Language, Mnemonic, MnemonicType};
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_seed_derivable::SeedDerivable;
-
 use solana_signer::Signer;
 use solana_transaction::Transaction;
-use wasm_bindgen::JsCast;
+use wallet_standard_base::{Cluster, Commitment};
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Headers, RequestInit};
 use zeroize::Zeroizing;
 
-use crate::{AtollWalletError, AtollWalletResult, SolanaWalletAccount};
+use crate::{
+    AtollWalletError, AtollWalletResult, BrowserFetch, Reflection, SolanaCluster, SolanaCommitment,
+    SolanaWalletAccount,
+};
 
 const TEST_PASSPHRASE: &str = "quick brown fox";
 
@@ -96,7 +99,7 @@ impl<'wa> SolanaAccountKeypair {
     }
 
     // TODO type checks to see if a dapp is currently authorized to perform an operation
-    pub fn sign_message(&mut self, public_key: &[u8; 32], message: &[u8]) -> [u8; 64] {
+    pub fn sign_message(&self, _public_key: &[u8; 32], message: &[u8]) -> [u8; 64] {
         let signature = self.keypair.sign_message(message);
 
         *signature.as_array()
@@ -104,14 +107,60 @@ impl<'wa> SolanaAccountKeypair {
 
     // TODO type checks to see if a dapp is currently authorized to perform an operation
     pub fn sign_transaction(
-        &mut self,
-        public_key: &[u8; 32],
+        &self,
+        _public_key: &[u8; 32],
         mut transaction: Transaction,
     ) -> Transaction {
         let recent_blockhash = transaction.message.hash();
         transaction.sign(&[&self.keypair], recent_blockhash);
 
         transaction
+    }
+
+    // TODO type checks to see if a dapp is currently authorized to perform an operation
+    pub async fn sign_and_send_transaction(
+        &self,
+        _public_key: [u8; 32],
+        mut transaction: Transaction,
+        send_options: crate::SendOptions,
+        cluster: SolanaCluster,
+    ) -> AtollWalletResult<JsValue> {
+        let recent_blockhash = transaction.message.hash();
+        transaction.sign(&[&self.keypair], recent_blockhash);
+
+        let mut fetch = BrowserFetch::new()?;
+
+        let signed_transaction_bytes = bincode::serialize(&transaction).or(Err(
+            AtollWalletError::Input("Unable to convert the signed transaction into bytes for `solana:signAndSendTransaction`".to_string())
+        ))?;
+        let encoded_signed_transaction = Base64::encode_string(&signed_transaction_bytes);
+        let json_body = jzon::object! {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "sendTransaction",
+          "params": [
+            encoded_signed_transaction,
+            send_options.to_json()
+          ]
+        }
+        .to_string();
+        fetch.set_body(&json_body);
+
+        match fetch.send(cluster.endpoint()).await {
+            Err(error) => Err(error.into()),
+            Ok(success) => {
+                let success = success.json().or(Err(AtollWalletError::JsCast("Unable to get the JSON body after the response was send in `solana:sendAndSignTransaction`".to_string())));
+                match success {
+                    Err(error) => Err(error.into()),
+                    Ok(success_response) => {
+                        JsFuture::from(success_response)
+                                .await
+                                .or( Err(
+                                    AtollWalletError::JsCast("Unable to resolve the json body from the RPC response in `solana:sendAndSignTransaction`".to_string())))
+                    }
+                }
+            }
+        }
     }
 
     pub fn get_wallet_account(&'wa self) -> SolanaWalletAccount<'wa> {
@@ -142,21 +191,57 @@ impl ActiveDapp {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct SignInValues;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RecentBlockHashAtoll {
-    pub blockhash: solana_hash::Hash,
+#[derive(Debug, Default)]
+pub struct SendOptions {
+    pub preflight_commitment: SolanaCommitment,
+    pub skip_preflight: bool,
+    pub max_retries: usize,
 }
 
-impl RecentBlockHashAtoll {}
+impl SendOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ResultAtoll<T: core::fmt::Debug> {
-    pub value: T,
-}
+    pub fn parse(&mut self, options_js_value: JsValue) -> &mut Self {
+        if let Ok(options_object) = Reflection::new_object_from_js_value(options_js_value)
+            && let Ok(preflight_commitment) = options_object.get_object(
+            "preflightCommitment",
+            AtollWalletError::JsCast(
+                "`preflightCommitment` object was not found in the `requestData.options` for `solana:signTransaction`"
+                    .to_string(),
+            ),
+        ){
+            if let Some(value) = preflight_commitment.as_string() { self.preflight_commitment = value.as_str().into(); }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RpcOutcome<T: core::fmt::Debug> {
-    pub jsonrpc: String,
-    pub result: ResultAtoll<T>,
-    pub id: u8,
+        if let Ok(skip_preflight) = options_object.get_object(
+            "skipPreflight",
+            AtollWalletError::JsCast(
+                "`skipPreflight` object was not found in the `requestData.options` for `solana:signTransaction`"
+                    .to_string(),
+            ),
+        )
+            && let Some(value) = skip_preflight.as_bool() { self.skip_preflight = value; }
+
+         if let Ok(max_retries) = options_object.get_object(
+            "maxRetries",
+            AtollWalletError::JsCast(
+                "`maxRetries` object was not found in the `requestData.options` for `solana:signTransaction`"
+                    .to_string(),
+            ),
+        )
+            && let Some(value) = max_retries.as_f64() { self.max_retries = value as usize; }
+        }
+
+        self
+    }
+
+    pub fn to_json(&self) -> jzon::JsonValue {
+        jzon::object! {
+            preflightCommitment: self.preflight_commitment.as_str(),
+            skip_preflight: self.skip_preflight,
+            max_retries: self.max_retries,
+            encoding: "base64"
+        }
+    }
 }

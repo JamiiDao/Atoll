@@ -1,9 +1,8 @@
 use wasm_bindgen::JsValue;
-use web_sys::js_sys::{self, Reflect};
 
 pub type AtollWalletResult<T> = Result<T, AtollWalletError>;
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum AtollWalletError {
     #[error("Expected a JsValue to be of type js_sys::Object but it is of type `{0}`")]
     JsValueIsNotAnObject(String),
@@ -39,47 +38,6 @@ pub enum AtollWalletError {
     UnauthorizedKeypairRequest,
     #[error("The `{0}` timestamp is not a valid ISO8601 timestamp.")]
     InvalidIS08601Timestamp(String),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum WasmOutcome {
-    Success(JsValue),
-    Failure(JsValue),
-}
-
-impl WasmOutcome {
-    pub fn new(value: AtollWalletResult<JsValue>) -> Self {
-        match value {
-            Ok(success) => Self::Success(success),
-            Err(failure) => Self::Failure(failure.to_string().into()),
-        }
-    }
-
-    pub fn new_generic<T: Into<wasm_bindgen::JsValue> + core::fmt::Debug>(
-        value: AtollWalletResult<T>,
-    ) -> Self {
-        match value {
-            Ok(success) => Self::Success(success.into()),
-            Err(failure) => Self::Failure(failure.to_string().into()),
-        }
-    }
-
-    pub fn to_object(&self) -> js_sys::Object {
-        let outcome_object = js_sys::Object::new();
-
-        match self {
-            Self::Success(success_value) => {
-                Reflect::set(&outcome_object, &"success".into(), success_value)
-                    .expect("Unable to set the `WasmOutcome` success");
-            }
-            Self::Failure(failure_value) => {
-                Reflect::set(&outcome_object, &"failure".into(), failure_value)
-                    .expect("Unable to set the `WasmOutcome` success");
-            }
-        }
-
-        outcome_object
-    }
 }
 
 impl From<bip39::ErrorKind> for AtollWalletError {

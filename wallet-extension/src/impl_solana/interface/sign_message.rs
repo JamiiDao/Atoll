@@ -2,11 +2,16 @@ use wasm_bindgen::{JsCast, JsValue};
 use web_sys::js_sys::{self, Array, Uint8Array};
 
 use crate::{
-    App, AtollWalletError, AtollWalletResult, Reflection, SolanaConstants, app_console_log,
+    App, AtollWalletError, AtollWalletResult, KeypairOps, Reflection, SolanaConstants,
+    app_console_log,
 };
 
 impl App {
-    pub fn solana_sign_message(&mut self, data: JsValue) -> AtollWalletResult<JsValue> {
+    pub async fn solana_sign_message(
+        active_hash: blake3::Hash,
+        keypair_ops: KeypairOps,
+        data: JsValue,
+    ) -> AtollWalletResult<JsValue> {
         app_console_log(SolanaConstants::SIGN_MESSAGE, &data);
         let data = Reflection::new_object_from_js_value(data)?;
 
@@ -47,23 +52,25 @@ impl App {
             )))?
             .to_vec();
 
-        let signature = self
-            .active_keypair()?
-            .sign_message(&public_key, &message_bytes);
+        if let Some(active_keypair) = keypair_ops.write().await.get_mut(&active_hash) {
+            let signature = active_keypair.sign_message(&public_key, &message_bytes);
 
-        let signed_message_output = Reflection::new_object();
+            let signed_message_output = Reflection::new_object();
 
-        let signed_message = Uint8Array::new_from_slice(message_bytes.as_slice());
-        signed_message_output.set_object_secure("signedMessage", &signed_message);
+            let signed_message = Uint8Array::new_from_slice(message_bytes.as_slice());
+            signed_message_output.set_object_secure("signedMessage", &signed_message);
 
-        let signature = Uint8Array::new_from_slice(&signature);
-        signed_message_output.set_object_secure("signature", &signature);
+            let signature = Uint8Array::new_from_slice(&signature);
+            signed_message_output.set_object_secure("signature", &signature);
 
-        signed_message_output.set_object_secure("signatureType", &"ed25519".into());
+            signed_message_output.set_object_secure("signatureType", &"ed25519".into());
 
-        let output_array = Array::new();
-        output_array.push(&signed_message_output.take());
+            let output_array = Array::new();
+            output_array.push(&signed_message_output.take());
 
-        Ok(output_array.into())
+            Ok(output_array.into())
+        } else {
+            Err(AtollWalletError::UnauthorizedKeypairRequest)
+        }
     }
 }

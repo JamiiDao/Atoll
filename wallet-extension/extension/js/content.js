@@ -19,6 +19,9 @@
   const RELAY_SIGN_TRANSACTION = "relay:solana:signTransaction";
   const SOLANA_SIGN_TRANSACTION = "solana:signTransaction";
 
+  const RELAY_SIGN_AND_SEND_TRANSACTION = "relay:solana:signAndSendTransaction";
+  const SOLANA_SIGN_AND_SEND_TRANSACTION = "solana:signAndSendTransaction";
+
   function injectPageWallet(walletInfo) {
     const STANDARD_CONNECT = "standard:connect";
     const RELAY_STANDARD_CONNECT = "relay:standard:connect";
@@ -31,6 +34,10 @@
 
     const RELAY_SIGN_TRANSACTION = "relay:solana:signTransaction";
     const SOLANA_SIGN_TRANSACTION = "solana:signTransaction";
+
+    const RELAY_SIGN_AND_SEND_TRANSACTION =
+      "relay:solana:signAndSendTransaction";
+    const SOLANA_SIGN_AND_SEND_TRANSACTION = "solana:signAndSendTransaction";
 
     const WALLET_REGISTER_EVENT = "wallet-standard:register-wallet";
     const APP_READY_EVENT = "wallet-standard:app-ready";
@@ -143,21 +150,9 @@
           await this.#atollWallet.connect(
             silent ? { onlyIfTrusted: true } : undefined
           );
-
-          const result = await new Promise((resolve, reject) => {
-            const listener = (event) => {
-              if (event.source !== window) return;
-              if (event.data.type === RELAY_STANDARD_CONNECT) {
-                window.removeEventListener("message", listener);
-
-                if (event.data.failure) reject(new Error(event.data.failure));
-                else resolve(event.data.success);
-              }
-            };
-            window.addEventListener("message", listener);
-
-            // Send request → content.js
-            window.postMessage({ type: STANDARD_CONNECT, text: "" }, "*");
+          const result = await sendRequest({
+            requestType: STANDARD_CONNECT,
+            relayType: RELAY_STANDARD_CONNECT,
           });
 
           this.#account = result;
@@ -171,77 +166,63 @@
         await this.#atollWallet.disconnect();
       };
       #signAndSendTransaction = async (...inputs) => {
-        console.log("SIGN & SEND TX", ...inputs);
-        return [{ signature: new Uint8Array([1, 2, 3]) }];
-      };
-      #signTransaction = async (...inputs) => {
-        console.log("SIGN TX", ...inputs);
-        const result = await new Promise((resolve, reject) => {
-          const listener = (event) => {
-            if (event.source !== window) return;
-            if (event.data.type === RELAY_SIGN_TRANSACTION) {
-              window.removeEventListener("message", listener);
-
-              if (event.data.failure) reject(new Error(event.data.failure));
-              else resolve(event.data.success);
-            }
-          };
-          window.addEventListener("message", listener);
-
-          // Send request → content.js
-          window.postMessage(
-            { type: SOLANA_SIGN_TRANSACTION, requestData: inputs[0], text: "" },
-            "*"
-          );
+        const result = await sendRequest({
+          requestType: SOLANA_SIGN_AND_SEND_TRANSACTION,
+          relayType: RELAY_SIGN_AND_SEND_TRANSACTION,
+          requestData: inputs[0],
         });
 
         return result;
-        // return [{ signedTransaction: new Uint8Array([4, 5, 6]) }];
+      };
+      #signTransaction = async (...inputs) => {
+        const result = await sendRequest({
+          requestType: SOLANA_SIGN_TRANSACTION,
+          relayType: RELAY_SIGN_TRANSACTION,
+          requestData: inputs[0],
+        });
+
+        return result;
       };
       #signMessage = async (...inputs) => {
-        const result = await new Promise((resolve, reject) => {
-          const listener = (event) => {
-            if (event.source !== window) return;
-            if (event.data.type === RELAY_SIGN_MESSAGE) {
-              window.removeEventListener("message", listener);
-
-              if (event.data.failure) reject(new Error(event.data.failure));
-              else resolve(event.data.success);
-            }
-          };
-          window.addEventListener("message", listener);
-
-          // Send request → content.js
-          window.postMessage(
-            { type: SOLANA_SIGN_MESSAGE, requestData: inputs[0], text: "" },
-            "*"
-          );
+        const result = await sendRequest({
+          requestType: SOLANA_SIGN_MESSAGE,
+          relayType: RELAY_SIGN_MESSAGE,
+          requestData: inputs[0],
         });
 
         return result;
       };
       #signIn = async (...inputs) => {
-        const result = await new Promise((resolve, reject) => {
-          const listener = (event) => {
-            if (event.source !== window) return;
-            if (event.data.type === RELAY_SOLANA_SIGN_IN) {
-              window.removeEventListener("message", listener);
-
-              if (event.data.failure) reject(new Error(event.data.failure));
-              else resolve(event.data.success);
-            }
-          };
-          window.addEventListener("message", listener);
-
-          // Send request → content.js
-          window.postMessage(
-            { type: SOLANA_SIGN_IN, requestData: inputs[0], text: "" },
-            "*"
-          );
+        const result = await sendRequest({
+          requestType: SOLANA_SIGN_IN,
+          relayType: RELAY_SOLANA_SIGN_IN,
+          requestData: inputs[0],
         });
 
         return result;
       };
+    }
+
+    function sendRequest({ requestType, relayType, requestData }) {
+      return new Promise((resolve, reject) => {
+        const listener = (event) => {
+          if (event.source !== window) return;
+          if (event.data.type === relayType) {
+            window.removeEventListener("message", listener);
+
+            if (event.data.failure) {
+              reject(new Error(event.data.failure));
+            } else {
+              resolve(event.data.success);
+            }
+          }
+        };
+
+        window.addEventListener("message", listener);
+
+        // Fire request → content.js
+        window.postMessage({ type: requestType, requestData }, "*");
+      });
     }
 
     const wallet = new AtollWallet();
@@ -265,49 +246,33 @@
   // Content script side
   const extension = typeof browser !== "undefined" ? browser : chrome;
 
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    if (event.data.type === STANDARD_CONNECT) {
-      extension.runtime.sendMessage(
-        { resource: event.data.type, data: window.location.origin },
-        (response) => {
-          // Relay back under RELAY_STANDARD_CONNECT
-          window.postMessage(
-            {
-              type: RELAY_STANDARD_CONNECT,
-              success: response.success,
-              failure: response.failure,
-            },
-            "*"
-          );
-        }
-      );
-    }
+  setupRelayListener({
+    requestType: STANDARD_CONNECT,
+    relayType: RELAY_STANDARD_CONNECT,
+    getData: () => window.location.origin,
+  });
+
+  setupRelayListener({
+    requestType: SOLANA_SIGN_IN,
+    relayType: RELAY_SOLANA_SIGN_IN,
+    getData: (event) => event.data,
+  });
+
+  setupRelayListener({
+    requestType: SOLANA_SIGN_MESSAGE,
+    relayType: RELAY_SIGN_MESSAGE,
+    getData: (event) => event.data,
+  });
+
+  setupRelayListener({
+    requestType: SOLANA_SIGN_TRANSACTION,
+    relayType: RELAY_SIGN_TRANSACTION,
+    getData: (event) => event.data,
   });
 
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
-    if (event.data.type === SOLANA_SIGN_IN) {
-      extension.runtime.sendMessage(
-        { resource: event.data.type, data: event.data },
-        (response) => {
-          // Relay back under RELAY_STANDARD_CONNECT
-          window.postMessage(
-            {
-              type: RELAY_SOLANA_SIGN_IN,
-              success: response.success,
-              failure: response.failure,
-            },
-            "*"
-          );
-        }
-      );
-    }
-  });
-
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    if (event.data.type === SOLANA_SIGN_MESSAGE) {
+    if (event.data.type === SOLANA_SIGN_AND_SEND_TRANSACTION) {
       extension.runtime.sendMessage(
         { resource: event.data.type, data: event.data },
         (response) => {
@@ -315,7 +280,7 @@
           // Relay back under RELAY_STANDARD_CONNECT
           window.postMessage(
             {
-              type: RELAY_SIGN_MESSAGE,
+              type: RELAY_SIGN_AND_SEND_TRANSACTION,
               success: response.success,
               failure: response.failure,
             },
@@ -326,24 +291,23 @@
     }
   });
 
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    if (event.data.type === SOLANA_SIGN_TRANSACTION) {
+  function setupRelayListener({ requestType, relayType, getData }) {
+    window.addEventListener("message", (event) => {
+      if (event.source !== window) return;
+      if (event.data.type !== requestType) return;
+
       extension.runtime.sendMessage(
-        { resource: event.data.type, data: event.data },
-        (response) => {
-          console.log("Content script got response from background:", response);
-          // Relay back under RELAY_STANDARD_CONNECT
-          window.postMessage(
-            {
-              type: RELAY_SIGN_TRANSACTION,
-              success: response.success,
-              failure: response.failure,
-            },
-            "*"
-          );
+        { resource: requestType, data: getData(event) },
+        (responsePromise) => {
+          Promise.resolve(responsePromise)
+            .then((success) => {
+              window.postMessage({ type: relayType, success }, "*");
+            })
+            .catch((failure) => {
+              window.postMessage({ type: relayType, failure }, "*");
+            });
         }
       );
-    }
-  });
+    });
+  }
 })();
